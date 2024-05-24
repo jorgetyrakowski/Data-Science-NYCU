@@ -1,0 +1,396 @@
+---
+title: "HM5"
+author: "狄豪飛"
+date: "2023-10-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, message = FALSE, include=FALSE}
+# Cargar las librerías necesarias
+library(tidyverse)
+```
+
+## Student Stress Factors: A Comprehensive Analysis
+It contains various features that impact a student's stress level, grouped into Psychological, Physiological, Environmental, Academic, and Social factors.
+
+
+### Understand the Dataset and Objectives
+
+#### Dataset Overview:
+
+Psychological Factors: 
+anxiety_level, self_esteem, mental_health_history, depression
+
+Physiological Factors:
+headache, blood_pressure, sleep_quality, breathing_problem
+
+Environmental Factors: 
+noise_level, living_conditions, safety, basic_needs
+
+Academic Factors:
+academic_performance, study_load, teacher_student_relationship, future_career_concerns
+
+Social Factor: 
+social_support, peer_pressure, extracurricular_activities, bullying
+
+Objectives:
+To understand which features have the most impact on a student's stress level.
+
+```{r, message = FALSE}
+# Cargar el conjunto de datos
+df <- read.csv("C:/Users/georg/OneDrive/Desktop/Data Science/HM5/HM5/StressLevelDataset.csv")
+
+# Visualizar las primeras filas del conjunto de datos
+head(df)
+
+# Obtener un resumen estadístico
+summary(df)
+
+# Verificar los tipos de datos de cada columna
+str(df)
+
+# Comprobar valores faltantes
+missing_values <- sapply(df, function(x) sum(is.na(x)))
+print(paste("Valores faltantes por columna:"))
+print(missing_values)
+```
+
+
+
+### Data Cleaning
+
+```{r}
+# Verificar registros duplicados
+duplicated_rows <- duplicated(df)
+print(paste("Número de registros duplicados:", sum(duplicated_rows)))
+
+# Eliminar registros duplicados si los hay
+if (sum(duplicated_rows) > 0) {
+  df <- df[!duplicated_rows, ]
+}
+
+# Función para identificar valores atípicos
+identify_outliers <- function(column, data) {
+  q1 <- quantile(data[[column]], 0.25)
+  q3 <- quantile(data[[column]], 0.75)
+  iqr <- q3 - q1
+  
+  lower_bound <- q1 - (1.5 * iqr)
+  upper_bound <- q3 + (1.5 * iqr)
+  
+  outliers <- subset(data, data[[column]] < lower_bound | data[[column]] > upper_bound)
+  
+  return(nrow(outliers))
+}
+
+# Características seleccionadas para examinar valores atípicos
+selected_features <- c('anxiety_level', 'self_esteem', 'blood_pressure', 'academic_performance')
+
+# Identificar y contar valores atípicos para las características seleccionadas
+outliers_count <- sapply(selected_features, identify_outliers, data=df)
+print("Número de valores atípicos por columna:")
+print(outliers_count)
+
+```
+
+#### Missing Values:
+There are no missing values in any of the columns.
+
+#### Duplicate Rows:
+There are no duplicate rows in the dataset.
+
+Since the dataset doesn't have any missing values or duplicates, we can proceed to the next step without needing to clean the data in these aspects.
+
+
+
+### Data Transformation
+
+```{r}
+
+# Resumen estadístico para entender la distribución de cada característica
+summary(df)
+
+# Escalado Min-Max
+min_vals <- apply(df, 2, min, na.rm = TRUE)
+max_vals <- apply(df, 2, max, na.rm = TRUE)
+df_minmax <- as.data.frame(scale(df, center = min_vals, scale = max_vals - min_vals))
+
+# Normalización Z-score
+df_zscore <- as.data.frame(scale(df))
+
+# Visualizar las primeras filas de los conjuntos de datos escalados para comparar
+head(df_minmax)
+head(df_zscore)
+
+
+```
+
+### The statistical summary provides the following insights:
+
+#### Range of Features:
+Most features seem to be scored on a scale that varies from feature to feature. For instance, anxiety_level ranges from 0 to 21, while blood_pressure ranges from 1 to 3.
+
+#### Distribution: 
+The mean and standard deviation for each feature provide an idea of the data distribution. For example, self_esteem has a mean of approximately 17.78 and a standard deviation of approximately 8.94, indicating a fairly wide distribution.
+
+#### Outliers: 
+There don't appear to be any extreme values that could be considered outliers based on the min-max range and quartile values.
+
+
+
+### Univariate Analysis
+```{r}
+
+# Función para trazar análisis univariante para una columna dada
+plot_univariate_analysis <- function(column, data, scaled_data1, scaled_data2) {
+  
+  # Crear una ventana gráfica con 3 paneles
+  par(mfrow=c(1, 3))
+  
+  # Histograma para datos originales
+  hist(data[[column]], main=paste("Original: ", column), xlab=column, col="blue", breaks=20, freq=FALSE)
+  
+  # Histograma para datos escalados por Min-Max
+  hist(scaled_data1[[column]], main=paste("Min-Max Scaled: ", column), xlab=column, col="green", breaks=20, freq=FALSE)
+  
+  # Histograma para datos normalizados por Z-score
+  hist(scaled_data2[[column]], main=paste("Z-Score Normalized: ", column), xlab=column, col="red", breaks=20, freq=FALSE)
+}
+
+# Características seleccionadas para demostrar el enfoque
+selected_features <- c('anxiety_level', 'self_esteem', 'blood_pressure', 'academic_performance')
+
+# Generar gráficos para las características seleccionadas
+for (feature in selected_features) {
+  plot_univariate_analysis(feature, df, df_minmax, df_zscore)
+}
+```
+
+#### Observations:
+
+#### Anxiety Level: 
+Appears to be slightly left-skewed in all forms. This suggests that most students have moderate to high anxiety levels.
+
+#### Self Esteem: 
+This feature shows a nearly normal distribution in its original and scaled forms, indicating a balanced range of self-esteem levels among students.
+
+#### Blood Pressure: 
+The distribution looks bimodal, with two peaks. This could indicate two different groups within the data, perhaps separated by some other feature or condition.
+
+#### Academic Performance: 
+Shows a nearly uniform distribution in its original form but becomes a bit more bell-shaped when scaled.
+
+These visualizations give us valuable insights into each feature's distribution, which can be useful for feature selection and model building later on. It also helps in understanding how scaling methods affect the distribution.
+
+
+
+### Bivariate and Multivariate Analysis
+```{r}
+
+# Cargar la biblioteca para gráficos de correlación
+library(corrplot)
+
+# Calcular la matriz de correlación
+cor_matrix <- cor(df, use = "complete.obs")
+
+# Dibujar la matriz de correlación
+corrplot(cor_matrix, method = "color")
+
+
+# Función corregida para trazar gráficos de caja con colores
+plot_bivariate_analysis <- function(target, features, data) {
+  for (feature in features) {
+    p <- ggplot(data, aes(x=factor(get(target)), y=get(feature), fill=factor(get(target)))) +
+      geom_boxplot() +
+      scale_fill_brewer(palette="Set1") +
+      ggtitle(paste(feature, " vs ", target)) +
+      xlab(target) +
+      ylab(feature)
+    print(p)
+  }
+}
+
+# Características seleccionadas
+selected_features <- c('anxiety_level', 'self_esteem', 'blood_pressure', 'academic_performance', 
+                       'headache', 'sleep_quality', 'noise_level', 'living_conditions', 
+                       'study_load', 'teacher_student_relationship', 
+                       'social_support', 'peer_pressure', 'extracurricular_activities', 'bullying')
+
+# Generar gráficos de caja con colores
+plot_bivariate_analysis('stress_level', selected_features, df)
+
+
+
+# Función para realizar pruebas ANOVA
+perform_anova_tests <- function(target, features, data) {
+  results <- data.frame(Feature=character(), P_value=numeric())
+  for (feature in features) {
+    anova_result <- aov(as.formula(paste(target, "~", feature)), data=data)
+    p_value <- summary(anova_result)[[1]][["Pr(>F)"]][1]
+    results <- rbind(results, data.frame(Feature=feature, P_value=p_value))
+  }
+  return(results)
+}
+
+# Realizar pruebas ANOVA
+anova_results <- perform_anova_tests('stress_level', selected_features, df)
+
+# Imprimir los resultados
+print(anova_results)
+
+```
+
+#### Bivariate and Multivariate Analysis
+
+##### Correlation Matrix:
+The heatmap shows the correlation between all the features and the target variable (stress_level). A higher absolute value indicates a stronger relationship.
+
+Features like anxiety_level, depression, and mental_health_history seem to have a relatively higher correlation with stress_level.
+
+##### Bivariate Analysis:
+
+Box plots for the target variable (stress_level) against selected features were plotted.
+
+Anxiety Level: Higher levels of stress appear to be associated with higher anxiety levels.
+
+Self Esteem: Lower stress levels seem to correspond with higher self-esteem.
+
+Blood Pressure: There doesn't appear to be a clear trend between blood pressure and stress levels, indicating a weaker relationship.
+
+Academic Performance: Similarly, academic performance also doesn't show a strong trend with respect to stress levels.
+
+These analyses can guide feature selection and help in understanding how different features interact with the target variable.
+
+
+
+### Statistical Testing
+
+```{r}
+# Función para realizar pruebas t de Student o ANOVA
+perform_stat_tests <- function(target, features, data) {
+  results <- data.frame(Feature=character(), P_value=numeric())
+  
+  for (feature in features) {
+    if (length(unique(data[[target]])) == 2) {
+      t_result <- t.test(get(feature) ~ get(target), data=data)
+      p_value <- t_result$p.value
+    } else {
+      anova_result <- aov(as.formula(paste(feature, "~", target)), data=data)
+      p_value <- summary(anova_result)[[1]][["Pr(>F)"]][1]
+    }
+    
+    results <- rbind(results, data.frame(Feature=feature, P_value=p_value))
+  }
+  
+  return(results)
+}
+
+# Características seleccionadas para pruebas estadísticas
+selected_features <- c('anxiety_level', 'self_esteem', 'blood_pressure', 'academic_performance',
+                       'headache', 'sleep_quality', 'noise_level', 'living_conditions',
+                       'study_load', 'teacher_student_relationship',
+                       'social_support', 'peer_pressure', 'extracurricular_activities', 'bullying')
+
+# Realizar pruebas t de Student o ANOVA
+stat_results <- perform_stat_tests('stress_level', selected_features, df)
+
+# Imprimir los resultados
+print("Resultados de las pruebas estadísticas:")
+print(stat_results)
+
+```
+
+#### Observations:
+All p-values are very close to zero, which suggests that there is a statistically significant difference in these features across different levels of stress.
+
+This confirms the observations made during the bivariate analysis and adds statistical evidence to the relationships.
+
+
+
+### Data Visualization - Summary Plots
+
+```{r}
+# Función para hacer gráficos de barras para variables categóricas
+plot_categorical <- function(column, data) {
+  p <- ggplot(data, aes_string(x=column)) +
+    geom_bar(aes(fill=column), position="dodge") +
+    ggtitle(paste("Distribución de", column))
+  print(p)
+}
+
+# Características categóricas seleccionadas para visualización
+categorical_features <- c('mental_health_history', 'living_conditions', 'teacher_student_relationship', 'bullying')
+
+# Dibujar gráficos de barras
+for (feature in categorical_features) {
+  plot_categorical(feature, df)
+}
+
+# Función para hacer gráficos de densidad para variables numéricas
+plot_density <- function(column, data) {
+  p <- ggplot(data, aes_string(x=column)) +
+    geom_density(aes(fill=column), alpha=0.5) +
+    ggtitle(paste("Densidad de", column))
+  print(p)
+}
+
+# Características numéricas seleccionadas para visualización
+numeric_features <- c('anxiety_level', 'self_esteem', 'blood_pressure', 'academic_performance')
+
+# Dibujar gráficos de densidad
+for (feature in numeric_features) {
+  plot_density(feature, df)
+}
+
+
+# Función para crear gráficos de violín para una columna dada contra la variable objetivo
+plot_violin <- function(target, features, data) {
+  for (feature in features) {
+    p <- ggplot(data, aes_string(x=target, y=feature, fill=target)) +
+      geom_violin(scale="area") +
+      ggtitle(paste(feature, " vs ", target)) +
+      xlab(target) +
+      ylab(feature)
+    print(p)
+  }
+}
+
+# Características numéricas seleccionadas para visualización con gráficos de violín
+selected_features <- c('anxiety_level', 'self_esteem', 'blood_pressure', 'academic_performance')
+
+# Crear gráficos de violín para las características seleccionadas contra 'stress_level'
+plot_violin('stress_level', selected_features, df)
+
+
+```
+
+### Observations:
+
+#### Anxiety Level: 
+The plot reiterates that higher levels of stress are associated with higher anxiety levels.
+
+#### Self Esteem:
+Lower levels of stress seem to correspond with higher self-esteem, confirming our previous observations.
+
+#### Blood Pressure:
+The plot shows a wide range of blood pressure levels across different stress levels, but there isn't a clear trend.
+
+#### Academic Performance: 
+Similar to blood pressure, there isn't a strong trend between academic performance and stress levels.
+
+These summary plots encapsulate the key findings from the EDA and provide a visual summary that can be useful for presentations or reports.
+
+
+
+#### Summary and Insights
+
+##### - Most features exhibit significant relationships with the stress_level based on statistical testing.
+
+#####  - Features like anxiety_level, self_esteem, and depression appear to have a stronger influence on stress_level.
+
+##### - The dataset did not require much cleaning, but feature scaling was essential for understanding how different features behave under normalization.

@@ -1,0 +1,205 @@
+---
+title: "HM6"
+author: "狄豪飛"
+date: "2023-11-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# Load the dataset
+library(readr)
+df <- read_csv("StressLevelDataset.csv")
+
+# Show the first few rows and descriptive statistics
+head(df)
+summary(df)
+```
+The dataset contains 1100 records and 21 columns, all of numeric type. There are no missing values in any of the columns.
+
+#### Data Preprocessing
+In this step, we deal with missing values, detect and handle outliers, and scale variables if necessary.
+```{r}
+# Check for outliers using Z-Score method
+z_scores <- scale(df)
+outliers <- rowSums(abs(z_scores) > 3)
+
+# Visualize variable distribution
+library(ggplot2)
+for(col in names(df)) {
+  ggplot(df, aes_string(col)) +
+    geom_histogram(bins = 20, alpha = 0.5, aes(fill = ..count..)) +
+    geom_density() +
+    labs(title = paste("Distribution of", col),
+         x = col,
+         y = "Frequency")
+}
+
+```
+#### No outliers detected and the variables show a more or less uniform or normal distribution..
+
+#### Data Visualization
+```{r}
+# Visualize the correlation between variables
+library(corrplot)
+correlations <- cor(df)
+corrplot(correlations, method="circle")
+
+
+```
+##### From this visualization, some interesting correlations can be observed, such as that anxiety_level and depression have a strong positive correlation.
+
+Heatmap to visualize the correlation between the different variables of the dataset. The values on the heatmap vary between -1 and 1, where:
+
+A value close to 1 implies a strong positive correlation: as one variable increases, the other also tends to increase.
+A value close to -1 implies a strong negative correlation: as one variable increases, the other tends to decrease.
+A value close to 0 implies no correlation.
+From this visualization, some interesting correlations can be observed. For example, anxiety_level and depression have a strong positive correlation, which is expected.
+
+
+#### Linear Regression
+```{r}
+# Define variables and split the data
+library(caTools)
+set.seed(42)
+split <- sample.split(df$stress_level, SplitRatio = 0.8)
+train_data <- subset(df, split == TRUE)
+test_data <- subset(df, split == FALSE)
+
+# Implement Linear Regression model
+linear_model <- lm(stress_level ~ ., data = train_data)
+
+# Make predictions and evaluate the model
+predictions <- predict(linear_model, newdata = test_data)
+mse <- mean((test_data$stress_level - predictions)^2)
+r2 <- summary(linear_model)$r.squared
+
+mse
+r2
+```
+##### The Linear Regression model has an R^2 of 0.789 and an MSE of 0.141, suggesting that the model is quite effective in predicting stress level based on the given features.
+
+Model Coefficients
+Intercept: 0.861
+Coefficients of Variables: The coefficients vary for each characteristic, some are positive and others negative, indicating their respective effect on the target variable stress_level.
+
+Interpretation
+The coefficients indicate how each independent variable influences the dependent variable stress_level. For example, the coefficient for anxiety_level is -0.0026, meaning that an increase in anxiety level is associated with a slight decrease in stress level, holding all other variables constant. This result may seem counterintuitive and could be due to overfitting or more complex relationships that are not captured in a simple linear model.
+
+
+#### Polynomial Regression
+```{}
+# Create polynomial features
+library(dplyr)
+poly_features <- select(train_data, -stress_level) %>% 
+  as.matrix() %>% 
+  poly(degree = 2)
+
+# Fit the polynomial model
+poly_model <- lm(stress_level ~ poly_features, data = train_data)
+
+# Make predictions and evaluate the model
+poly_predictions <- predict(poly_model, newdata = test_data)
+mse_poly <- mean((test_data$stress_level - poly_predictions)^2)
+r2_poly <- summary(poly_model)$r.squared
+
+mse_poly
+r2_poly
+
+```
+##### The polynomial regression model has an R^2 of 0.241 and an MSE of 0.507, suggesting that the relationships between the features and the stress level are not second-degree polynomials.
+
+Interpretation
+The polynomial regression model does not seem to perform as well as the linear regression model, since the R^2 is significantly lower and the MSE is higher. This could be due to overfitting of the model to the training data, especially since polynomial regression can capture more complex relationships and is therefore more prone to overfitting.
+
+In this case, it appears that a simple linear model is more appropriate for these data than a second-degree polynomial model.
+
+
+#### Regresión Ridge y Lasso
+```{r}
+# Fit Ridge model
+library(glmnet)
+ridge_model <- glmnet(as.matrix(train_data[, -1]), train_data$stress_level, alpha = 0)
+ridge_predictions <- predict(ridge_model, s = 1, newx = as.matrix(test_data[, -1]))
+
+# Evaluate Ridge model
+mse_ridge <- mean((test_data$stress_level - as.vector(ridge_predictions))^2)
+mse_ridge
+
+# Fit Lasso model
+lasso_model <- glmnet(as.matrix(train_data[, -1]), train_data$stress_level, alpha = 1)
+lasso_predictions <- predict(lasso_model, s = 0.1, newx = as.matrix(test_data[, -1]))
+
+# Evaluate Lasso model
+mse_lasso <- mean((test_data$stress_level - as.vector(lasso_predictions))^2)
+mse_lasso
+```
+##### Both Ridge and Lasso models offered similar performance to the linear regression model, indicating that regularization is not necessary in this case.
+
+Interpretation
+Both Ridge and Lasso models show similar performance to the original linear regression model in terms of R^2 and MSE. This is expected since these models are regularized variants of linear regression and are useful mainly when there is multicollinearity in the data or when overfitting is desired to be avoided. Given that our original linear regression model already performed well, it is not surprising that Ridge and Lasso provide similar results.
+
+
+#### Regresión con Árboles de Decisión
+```{r}
+# Fit Decision Tree model
+library(rpart)
+tree_model <- rpart(stress_level ~ ., data = train_data, method = "anova")
+
+# Make predictions and evaluate the model
+tree_predictions <- predict(tree_model, newdata = test_data)
+mse_tree <- mean((test_data$stress_level - tree_predictions)^2)
+r2_tree <- 1 - mse_tree / var(test_data$stress_level)
+
+mse_tree
+r2_tree
+
+```
+##### The decision tree model has an R^2 of 0.564 and an MSE of 0.291, suggesting that the relationships are not as nonlinear as to justify the use of a decision tree.
+
+Interpretation
+The decision tree model has a lower R^2 and higher MSE compared to the linear regression model, suggesting that it is not as effective for this specific data set. Decision trees are nonparametric models that are especially good at capturing nonlinear and complex relationships, but in this case, it appears that a simple linear model performs better.
+
+
+#### K-Nearest Neighbors (K-NN) Regression
+```{R}
+# Fit the K-NN model
+library(class)
+knn_predictions <- knn(train = train_data[, -1], test = test_data[, -1], cl = train_data$stress_level, k = 5)
+
+# Evaluate the K-NN model
+mse_knn <- mean((test_data$stress_level - as.numeric(knn_predictions))^2)
+r2_knn <- 1 - mse_knn / var(test_data$stress_level)
+
+mse_knn
+r2_knn
+```
+##### The K-NN model shows reasonable performance with an R^2 of 0.757, though not as good as the linear models.
+
+Interpretation
+The K-NN model shows reasonably good performance, although not as good as the linear regression model or the SVM model. It has an R^2 of 0.757, indicating that it explains approximately 76% of the variability in the test data. However, its MSE is a bit higher compared to other linear models.
+
+
+#### Overall Interpretation
+##### Linear Regression: This model performed the best overall, with an R^2 of 0.789. The coefficients of the model provide direct insight into how each characteristic affects the level of stress.
+
+##### Polynomial Regression: This model was not effective, with an R^2 of only 0.241, suggesting that the relationships between characteristics and stress level are not second-degree polynomial.
+
+##### Ridge and Lasso regression: Both models performed similarly to the linear regression model, indicating that regularization is not necessary in this case.
+
+##### Decision Tree Regression: This model underperformed the linear model, with an R^2 0.564, suggesting that the relationships are not so nonlinear as to justify the use of a decision tree.
+
+##### Regression with Support Vector Machines (SVM): This model performed similarly to the linear regression model, with an R^2 of 0.798.
+
+##### K-Nearest Neighbor (K-NN) Regression: This model performed reasonably well with an R^2 of 0.757, although not as well as the linear models.
+
+## Discuss possible problems you plan to investigate for future studies
+### Having learned about Regression, taking into account some datasets, I would like to approach these topics with these objectives:
+- Home Price Prediction: using characteristics such as size, location and number of rooms to predict the price of a house.
+- Energy Consumption Prediction: Using sensor data and historical records to predict energy consumption in a building.
+- Student Performance Assessment: Using features such as attendance, study hours, and past performance to predict a student's future performance.
+

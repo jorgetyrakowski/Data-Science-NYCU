@@ -1,0 +1,291 @@
+---
+title: "HM3"
+author: "狄豪飛"
+date: "2023-10-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 
+
+```{r, message = FALSE}
+if (!require(tidyverse)) {
+  install.packages("tidyverse")
+  library(tidyverse)
+}
+
+pacman::p_load(
+  rio,        # import/export of multiple data types
+  here,       # relative file path
+  janitor,    # data and table cleaning
+  lubridate,  # working with dates
+  epikit,     # age_categories() function
+  tidyverse,   # data management and visualization
+  skimr       # get an overview of data
+  )
+```
+
+## In this homework, I will use a dataset about a fictional Ebola outbreak, which is in excel format and will be very practical for cleaning and manipulate data.
+```{r}
+# Import data
+# In this task, I will use a dataset about a fictional Ebola outbreak, which is in Excel format and will be very practical for the topic.
+library(readxl)
+linelist_raw <- read_excel("C:/Users/georg/OneDrive/Desktop/Data Science/HM3.2/linelist_raw.xlsx")
+
+```
+
+# Modify names and Delete columns
+```{r}
+# We use the skim() function of the skimr package to get an overview of the whole dataframe. Columns are summarized by type, e.g., character, numeric. Note: "POSIXct" is a raw date type.
+skimr::skim(linelist_raw)
+
+# Column names
+names(linelist_raw)
+
+linelist <- linelist_raw %>%
+    
+    # Syntax to standardize column names
+    janitor::clean_names() %>% 
+    
+    # Manually rename columns
+           # NEW Name         # OLD Name
+     rename(date_infection       = infection_date,
+           date_hospitalisation = hosp_date,
+           date_outcome         = date_of_outcome) %>% 
+    
+    # Delete column
+    # In linelist_raw, there are some columns we don't need: row_num, merged_header, and x28. We remove them with a select() command in the cleaning pipeline:
+    select(-c(row_num, merged_header, x28))  
+
+  names(linelist)
+```
+
+# De-duplicate
+```{r}
+  # De-duplicate
+    # Refer to the de-duplication page for a number of options on how to delete duplicates (de-duplicate). Here, only a very simple example of de-duplicating rows is shown. We simply add the empty distinct() command to the pipeline. This ensures that there are no rows that are 100% duplicates of other rows (evaluated in all columns).
+    linelist <- linelist %>% 
+    distinct() 
+```
+
+# Creating and transforming columns
+```{r}
+ 
+  linelist <- linelist %>% 
+    # Add column
+    # Next, we create a new column bmi to hold the Body Mass Index (BMI) of each case - calculated using the formula BMI = kg/m^2, using the ht_cm and wt_kg columns.
+    mutate(across(contains("date"), as.Date), 
+           generation = as.numeric(generation),
+           age        = as.numeric(age)) %>% 
+    
+    # Add column: delay in hospitalization
+    mutate(days_onset_hosp = as.numeric(date_hospitalisation - date_onset))
+
+
+```
+
+# Cleaning the values in the "hospital" column
+```{r}
+# In linelist, we need to clean the values in the "hospital" column. There are various different spellings and many missing values.
+table(linelist$hospital, useNA = "always")  # Print a table of all unique values, including missing ones  
+
+# The recode() command below redefines the "hospital" column as the current "hospital" column, but with the changes specified in the recoding.
+  linelist <- linelist %>% 
+    # Clean the values in the hospital column
+    mutate(hospital = recode(hospital,
+                      # OLD = NEW
+                      "Mitylira Hopital"  = "Military Hospital",
+                      "Mitylira Hospital" = "Military Hospital",
+                      "Military Hopital"  = "Military Hospital",
+                      "Port Hopital"      = "Port Hospital",
+                      "Central Hopital"   = "Central Hospital",
+                      "other"             = "Other",
+                      "St. Marks Maternity Hopital (SMMH)" = "St. Mark's Maternity Hospital (SMMH)"
+                      ))  
+# Now we see that the spellings in the column have been corrected and consolidated.
+table(linelist$hospital, useNA = "always")
+
+
+
+
+```
+   
+    
+# Missing values
+```{r}
+# Convert temperatures above 40 to NA 
+linelist <- linelist %>% 
+  mutate(temp = replace(temp, temp > 40, NA))
+
+linelist <- linelist %>% 
+mutate(hospital = replace_na(hospital, "Missing"))%>%
+
+# Create the age_years column (From age and age_unit)
+    
+    mutate(age_years = case_when(
+          age_unit == "years" ~ age,
+          age_unit == "months" ~ age/12,
+          is.na(age_unit) ~ age)) %>%  
+  
+    mutate(
+          # categorías de edad: personalizada
+          age_cat = epikit::age_categories(age_years, breakers = c(0, 5, 10, 15, 20, 30, 50, 70)),
+        
+          # categorías de edad: 0 a 85 por 5s
+          age_cat5 = epikit::age_categories(age_years, breakers = seq(0, 85, 5)))
+
+```
+
+
+# Numeric Categories
+```{r}
+# Some special approaches for creating categories from numeric columns
+
+# Review the distribution
+# Check the class of the linelist variable "age"
+class(linelist$age_years)
+
+# First, examine the distribution of your data to make appropriate cutoff points.
+# Examine the distribution
+hist(linelist$age_years)
+
+summary(linelist$age_years, na.rm=T)
+
+
+# With the epikit package, we use the age_categories() function to easily categorize and label numeric columns.
+
+ # Categorize and label columns
+
+pacman::p_load(epikit)                    # Load package
+
+linelist <- linelist %>% 
+  mutate(
+    age_cat = age_categories(
+      age_years, 
+      lower = 0,
+      upper = 100,
+      by = 10))
+
+# Show table
+table(linelist$age_cat, useNA = "always")
+
+
+# Create a new variable by cutting the numeric age variable
+# The lower cutoff is excluded, but the upper cutoff is included in each category
+linelist <- linelist %>% 
+  mutate(
+    age_cat = cut(
+      age_years,
+      breaks = c(0, 5, 10, 15, 20,
+                 30, 50, 70, 100),
+      include.lowest = TRUE         # Include 0 in the lowest group
+      ))
+
+# Tabulate the number of observations per group
+table(linelist$age_cat, useNA = "always")
+
+
+
+```
+
+
+# Re-labeling of NA values
+```{r}
+# We assign a label like "Missing" to NA values. Since the new column is of Factor type (restricted values), we can't simply mutate it with replace_na() because this value will be rejected. Instead, we use fct_explicit_na() from forcats.
+
+linelist <- linelist %>% 
+  
+  # cut() creates age_cat, automatically of Factor class           
+  mutate(age_cat = cut(
+    age_years,
+    breaks = c(0, 5, 10, 15, 20, 30, 50, 70, 100),          
+    right = FALSE,
+    include.lowest = TRUE,        
+    labels = c("0-4", "5-9", "10-14", "15-19", "20-29", "30-49", "50-69", "70-100")),
+         
+    # Make missing values explicit
+    age_cat = fct_explicit_na(
+      age_cat,
+      na_level = "Missing age")  # You can specify the label
+  )    
+
+# Table to view counts
+table(linelist$age_cat, useNA = "always")
+
+
+# Quickly create breaks and labels
+# For a quick way to create breaks and label vectors, you can use something like the following.
+
+# Create breaks from 0 to 90 by 5
+age_seq = seq(from = 0, to = 90, by = 5)
+age_seq
+
+# Create labels for the above categories, assuming the default cut() settings
+age_labels = paste0(age_seq + 1, "-", age_seq + 5)
+age_labels
+
+# Check that both vectors have the same length
+length(age_seq) == length(age_labels)
+
+# Quartile Breaks
+
+quantile(linelist$age_years,               # Specify the numeric vector to work with
+  probs = c(0, .25, .50, .75, .90, .95),   # Specify desired percentiles
+  na.rm = TRUE)                            # Ignore missing values 
+
+# We use the results of quantile() as break points in age_categories() or cut(). Here, we create a new deciles column using cut() where the break points are defined using quantiles() on age_years. Below, we show the results using janitor's tabyl() so that you can see the percentages.
+linelist %>%                                # Start with linelist
+  mutate(deciles = cut(age_years,           # Create a new column with age_years deciles
+    breaks = quantile(                      # Define break points using quantile()
+      age_years,                               # Operate on age_years
+      probs = seq(0, 1, by = 0.1),             # 0.0 to 1.0 by 0.1
+      na.rm = TRUE),                           # Ignore missing values
+    include.lowest = TRUE)) %>%             # For cut(), include age 0
+  janitor::tabyl(deciles)                   # Pipe to show the table
+```
+  
+# Filter rows
+```{r}
+# Filter out missing values
+linelist %>% 
+  drop_na(case_id, age_years) 
+
+# Below is a simple one-line command to create a histogram of the start dates. Note that a second, smaller outbreak from 2012-2013 is also included in this raw dataset. For our analyses, we want to remove the entries from this earlier outbreak.
+
+hist(linelist$date_onset, breaks = 50)
+
+# How do the filters handle missing numeric and date values?
+
+table(Hospital  = linelist$hospital,                     # 
+      YearOnset = lubridate::year(linelist$date_onset),  # 
+      useNA     = "always")                              # 
+
+# How do we delete entries from this previous outbreak?
+# We can simply filter by date_onset to rows after June 2013.
+# We note that:
+#The first epidemic in 2012 and 2013 occurred in Hospital A, Hospital B, and that there were also 10 cases in Port Hospital.
+#Hospitals A and B had no cases in the second epidemic, but Port Hospital did.
+#Then we can take these criteria to delete entries from this previous outbreak
+
+linelist <- linelist %>% 
+  #  retain rows where the start is after 1 June 2013 OR where the start is missing and the hospital is not Hospital A or B.
+  filter(date_onset > as.Date("2013-06-01") | (is.na(date_onset) & !hospital %in% c("Hospital A", "Hospital B")))
+
+nrow(linelist)
+
+# When we re-do the cross-tabulation, we see that hospitals A and B are completely removed, and the 10 Port Hospital cases from 2012 and 2013 are removed, and all other values are the same, just as we wanted.
+
+table(Hospital  = linelist$hospital,                    
+      YearOnset = lubridate::year(linelist$date_onset),  
+      useNA     = "always")                             
+  
+```
+
+## Result: 
+After cleaning and manipulating a dataset, a more organised, structured dataset was obtained with coherent data, missing values handled, no duplicates, descriptive column names, data groupings and visualisation.
+
+## Discuss possible problems you plan to investigate for future studies: 
+After this HM3, I plan to perform a cleaning and manipulation of the "World University Rankings 2023 -" dataset, as I have seen that it presents several regularities and this process will be key to be able to correctly analyse the dataset, minimising errors, guaranteeing the quality of the data and facilitating its visualisation, this last part will be useful for HM4.

@@ -1,0 +1,194 @@
+---
+title: "Employment-to-Population Ratio Analysis"
+author: "狄豪飛"
+date: "2023-10-18"
+output: html_document
+---
+
+# Introduction
+
+
+Employment-to-Population Ratio Analysis
+This analysis aims to explore the employment-to-population ratio dataset, focusing on various demographic groups and years.
+
+Load Libraries and Data
+First, let's load the necessary libraries and the dataset.
+```{r setup, include=FALSE}
+# Load the necessary libraries
+library(ggplot2)
+library(tidyr)
+library(reshape2)
+
+# Read the data
+df <- read.csv("employment_to_population_1979_to_2022.csv")
+names(df)
+
+
+```
+
+## Boxplot: Employment-to-Population Ratios Across Age Groups
+In this boxplot, each age group is represented on the x-axis, and the employment-to-population ratios are on the y-axis. This allows for a direct comparison of the distribution of employment-to-population ratios across age groups. It shows the median, quartiles, and potential outliers for each age group.
+
+````{r}
+# Create a boxplot for the employment-to-population ratios across different age groups
+df_melted <- melt(df, id.vars = "year", measure.vars = c("X16.24", "X25.54", "X55.64"))
+
+ggplot(df_melted, aes(x = variable, y = value)) +
+  geom_boxplot() +
+  ggtitle("Boxplot: Employment-to-Population Ratios Across Age Groups") +
+  xlab("Age Groups") +
+  ylab("Employment-to-Population Ratio") +
+  theme_minimal()
+
+```
+
+## Bar Plot: Average Employment-to-Population Ratio by Age Group
+This bar plot illustrates the average employment-to-population ratio across different age groups.
+
+```{r}
+# Calculate the means for the specific columns
+age_means <- colMeans(df[, c("X16.24", "X25.54", "X55.64", "X65.")])  # Replace these with your exact column names
+
+# Convert to data frame for ggplot
+age_means_df <- as.data.frame(t(age_means))
+colnames(age_means_df) <- c("mean_ratio")
+age_means_df$age_group <- rownames(age_means_df)
+
+# Create enhanced bar plot
+ggplot(age_means_df, aes(x = age_group, y = mean_ratio, fill = age_group)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(mean_ratio, 2)), vjust = -0.5) +
+  scale_fill_brewer(palette = "Set1") +
+  theme_minimal() +
+  ggtitle("Enhanced Bar Plot: Average Employment-to-Population Ratio by Age Group") +
+  xlab("Age Group") +
+  ylab("Average Employment-to-Population Ratio")
+
+```
+
+
+## Scatter Plot: Year vs Total Population
+The scatter plot shows how the total population has changed over the years.
+
+```{r}
+# Create scatter plot with improved y-axis labels
+ggplot(df, aes(x = year, y = total_population)) +
+  geom_point() +
+  scale_y_continuous(labels = scales::comma) +
+  ggtitle("Scatter Plot: Year vs Total Population") +
+  xlab("Year") +
+  ylab("Total Population") +
+  theme_minimal()
+
+```
+
+
+## QQ Plot: Employment-to-Population Ratio (Age 25-54)
+The QQ plot is used to check for normality in the employment-to-population ratio for the age group 25-54.
+
+```{r}
+qqnorm(df$"X25.54")
+qqline(df$"X25.54")
+
+```
+
+## Density Plot: Employment-to-Population Ratio (Less than High School)
+The density plot shows the distribution shape of the employment-to-population ratio for those with less than a high school education.
+
+```{r}
+ggplot(df, aes(x = less_than_hs)) +
+  geom_density() +
+  ggtitle("Density Plot: Employment-to-Population Ratio (Less than High School)")
+
+```
+
+## Pie Chart: Mean Employment-to-Population Ratio by Education Level
+The pie chart provides a quick overview of the mean employment-to-population ratio across different levels of education.
+
+```{r}
+education_means <- colMeans(df[, c("less_than_hs", "high_school", "some_college", "bachelors_degree", "advanced_degree")])
+pie(education_means, labels = names(education_means))
+
+```
+
+## Histogram: Employment-to-Population Ratio (Bachelor's Degree)
+The histogram helps us understand the variability in employment ratios for those with a bachelor's degree.
+
+```{r}
+ggplot(df, aes(x = bachelors_degree)) +
+  geom_histogram(binwidth = 1, fill = "blue", alpha = 0.7, color = "black") +
+  ggtitle("Histogram: Employment-to-Population Ratio (Bachelor's Degree)")
+```
+
+# Identifying Simpson's Paradox in Employment-to-Population Ratio Data
+
+This R Markdown document outlines the process of identifying and explaining Simpson's Paradox in a dataset containing employment-to-population ratios.
+
+## Simpson's Paradox
+
+Simpson's Paradox is a statistical phenomenon where a trend seen in different groups of data disappears or reverses when the groups are combined. We will investigate whether this paradox exists in our dataset.
+
+Overall Trend: Year vs Employment-to-Population Ratio (All Ages)
+First, let's examine the overall trend in the data
+
+````{r}
+ggplot(df, aes(x = year, y = all)) +
+  geom_point() +
+  ggtitle("Overall: Year vs Employment-to-Population Ratio (All Ages)") +
+  theme_minimal()
+````
+
+
+## Year vs Employment-to-Population Ratio (Age 16-24)
+Now let's look at the trend for the age group 16-24.
+
+````{r}
+ggplot(df, aes(x = year, y = `X16.24`)) +
+  geom_point() +
+  ggtitle("Year vs Employment-to-Population Ratio (Age 16-24)") +
+  theme_minimal()
+
+````
+
+
+## Year vs Employment-to-Population Ratio (Age 25-54)
+Next, we look at the age group 25-54.
+
+````{r}
+ggplot(df, aes(x = year, y = `X25.54`)) +
+  geom_point() +
+  ggtitle("Year vs Employment-to-Population Ratio (Age 25-54)") +
+  theme_minimal()
+
+````
+
+
+# Summary
+As we can see, the trends in the subgroups are different from the overall trend. This provides a visual confirmation of the presence of Simpson's Paradox in the dataset.
+
+## Final Overlay Plot
+
+To bring all these insights together, let's overlay all the trends in one plot. Each age group will be represented by a different color and shape, similar to the example provided.
+
+````{r}
+# Create an overlay plot with different colors and shapes for each age group
+ggplot(df, aes(x = year)) +
+  geom_point(aes(y = all, color = "All Ages", shape = "All Ages")) +
+  geom_point(aes(y = `X16.24`, color = "Age 16-24", shape = "Age 16-24")) +
+  geom_point(aes(y = `X25.54`, color = "Age 25-54", shape = "Age 25-54")) +
+  geom_point(aes(y = `X55.64`, color = "Age 55-64", shape = "Age 55-64")) +
+  scale_shape_manual(values=c(16, 17, 18, 19)) +
+  ggtitle("Overlay of All Trends: Year vs Employment-to-Population Ratio") +
+  ylab("Employment-to-Population Ratio") +
+  xlab("Year") +
+  theme_minimal()
+````
+
+This overlay plot visually confirms the presence of Simpson's Paradox in our dataset, as the trends within the age groups are not consistent with the overall trend.
+
+# Discuss possible problems you plan to investigate for future studies
+
+Having learned about Simpson's paradox, I thought I could use it in the analysis of the world's best universities dataset that I discussed in Task 1 to:
+- Break down the rankings by academic departments or faculties within each university this will be useful to me in solving the following problem: Does a highly ranked university overall have a uniformly high departmental ranking?
+- This will be useful for the following problem: Is the overall ranking of a university influenced by its location?
+

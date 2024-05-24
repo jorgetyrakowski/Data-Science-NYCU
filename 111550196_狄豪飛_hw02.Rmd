@@ -1,0 +1,215 @@
+---
+title: "Sleep and Health Data Analysis"
+author: "狄豪飛"
+date: "2023-09-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/georg/OneDrive/Desktop/Data Science/HM2")
+cat("Current Working Directory", getwd())
+```
+## Sleep and Health Data Analysis
+
+  In this report, we will use functions from some packages included in tidyverse to perform a sleep and health data analysis using the dataset "Sleep_health_and_lifestyle_dataset.csv". This will allow me to solve some of the problems I raised in HM1. At the end I will explain the results I have obtained.
+
+```{r}
+# Importing the .csv file
+my_data <- read.csv("Sleep_health_and_lifestyle_dataset.csv")
+```
+
+```{r}
+# Install package
+if (!require(tidyverse)) {
+  install.packages("tidyverse")
+  library(tidyverse)
+}
+```
+
+## Question 1: What is the average sleep duration among different age and gender groups? .
+```{r}
+# Calculate average sleep duration by gender
+result <- my_data %>%
+  group_by(Gender) %>%
+  summarize(AvgSleepDuration = mean(Sleep.Duration, na.rm = TRUE)) %>%
+  arrange(desc(AvgSleepDuration))  # Sort genders by descending average sleep duration
+
+# Create a bar chart with data labels and revised colors
+ggplot(result, aes(x = reorder(Gender, -AvgSleepDuration), y = AvgSleepDuration)) +
+  geom_bar(stat = "identity", fill = "#4CAF50", color = "black") +
+  geom_text(aes(label = round(AvgSleepDuration, 2)), vjust = -0.5, size = 4) +  # Data labels
+  labs(title = "Average Sleep Duration by Gender", x = "Gender", y = "Average Sleep Duration") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
+
+```
+
+## Question 2: Is there a relationship between sleep duration and the quality of sleep?.
+```{r}
+# The correlation value will be in the range of -1 to 1. A value close to 1 indicates a strong positive correlation, while a value close to -1 indicates a strong negative correlation.
+
+# Calculate the correlation between sleep duration and sleep quality
+correlation.Sduration.Qsleep <- cor.test(my_data$Sleep.Duration, my_data$Quality.of.Sleep, method = "pearson")
+
+# Create a scatter plot with trendline and highlighted statistics
+ggplot(my_data, aes(x = Sleep.Duration, y = Quality.of.Sleep)) +
+  geom_point(color = "blue", alpha = 0.5) +  # Blue points with transparency
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Red trendline
+  labs(title = "Relationship between Sleep Duration and Sleep Quality",
+       x = "Sleep Duration",
+       y = "Sleep Quality",
+       subtitle = paste("Correlation Coefficient:", round(correlation.Sduration.Qsleep$estimate, 2),
+                        "p-value:", format(correlation.Sduration.Qsleep$p.value, scientific = TRUE, digits = 2))) +
+  theme_minimal()
+
+# Display correlation results
+cat("Correlation Coefficient between Sleep Duration and Sleep Quality:",
+    round(correlation.Sduration.Qsleep$estimate, 2), "\n")
+cat("p-value:", format(correlation.Sduration.Qsleep$p.value, scientific = TRUE, digits = 2), "\n")
+
+# Interpretation of the results
+if (correlation.Sduration.Qsleep$p.value < 0.05) {
+  cat("The correlation is statistically significant (p < 0.05).\n")
+  if (correlation.Sduration.Qsleep$estimate > 0) {
+    cat("There is a moderate positive correlation between sleep duration and sleep quality.\n")
+  } else {
+    cat("There is a moderate negative correlation between sleep duration and sleep quality.\n")
+  }
+} else {
+  cat("The correlation is not statistically significant (p >= 0.05).\n")
+}
+```
+
+## Question 3: Do people with higher stress levels tend to have lower sleep quality?.
+```{r}
+# Calculate the correlation between Stress.Level and Quality.of.Sleep
+correlation_quality <- cor.test(my_data$Stress.Level, my_data$Quality.of.Sleep, method = "pearson")
+
+# Create a trendline scatter plot with highlighted statistics
+ggplot(my_data, aes(x = Stress.Level, y = Quality.of.Sleep)) +
+  geom_point(color = "blue", alpha = 0.5) +  # Blue points with transparency
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Red trendline
+  labs(title = "Relationship between Stress Level and Sleep Quality",
+       x = "Stress Level",
+       y = "Sleep Quality",
+       subtitle = paste("Correlation Coefficient:", round(correlation_quality$estimate, 2))) +
+  theme_minimal()
+
+# Display the correlation coefficient
+cat("Correlation Coefficient between Stress Level and Sleep Quality:", round(correlation_quality$estimate, 2), "\n")
+```
+
+## Question 4: # : Is there a correlation between daily physical activity levels and sleep duration or quality?
+```{r}
+# Calculate the correlation between Physical.Activity.Level and Sleep.Duration
+correlation_duration <- cor.test(my_data$Physical.Activity.Level, my_data$Sleep.Duration, method = "pearson")
+
+# Create a scatterplot between Physical.Activity.Level and Sleep.Duration
+scatter_duration <- ggplot(my_data, aes(x = Physical.Activity.Level, y = Sleep.Duration)) +
+  geom_point(color = "blue", alpha = 0.5) +  # Blue points with transparency
+  geom_smooth(method = "lm", color = "red") +  # Red trendline
+  labs(title = "Relationship between Physical Activity Level and Sleep Duration",
+       x = "Physical Activity Level",
+       y = "Sleep Duration") +
+  theme_minimal()
+
+# Calculate the correlation between Physical.Activity.Level and Quality.of.Sleep
+correlation_quality <- cor.test(my_data$Physical.Activity.Level, my_data$Quality.of.Sleep, method = "pearson")
+
+# Create a scatterplot between Physical.Activity.Level and Quality.of.Sleep
+scatter_quality <- ggplot(my_data, aes(x = Physical.Activity.Level, y = Quality.of.Sleep)) +
+  geom_point(color = "green", alpha = 0.5) +  # Green points with transparency
+  geom_smooth(method = "lm", color = "orange") +  # Orange trendline
+  labs(title = "Relationship between Physical Activity Level and Sleep Quality",
+       x = "Physical Activity Level",
+       y = "Sleep Quality") +
+  theme_minimal()
+
+# Display graphs and correlation results on the console
+print(scatter_duration)
+print(paste("Correlation between Physical Activity Level and Sleep Duration:", round(correlation_duration$estimate, 2)))
+
+print(scatter_quality)
+print(paste("Correlation between Physical Activity Level and Sleep Quality:", round(correlation_quality$estimate, 2)))
+```
+
+## Question 5 How do sleep patterns change with age? Are older individuals more likely to experience sleep disorders?
+```{r}
+# Scatterplot and probability of sleep disorders in older individuals
+ggplot(my_data, aes(x = Age, y = Sleep.Duration)) +
+  geom_point(color = "blue", alpha = 0.5) +  # Blue points with transparency
+  geom_smooth(method = "lm", color = "red") +  # Red trendline
+  labs(title = "Relationship between Age and Sleep Duration",
+       x = "Age",
+       y = "Sleep Duration",
+       subtitle = paste("Correlation Coefficient:", round(correlation_duration$estimate, 2))) +
+  theme_minimal()
+
+# Calculate the probability of experiencing sleep disorders in older individuals (Age >= 50)
+probability_disorder_in_elderly <- my_data %>%
+  filter(Age >= 50) %>%
+  summarize(ProbabilityDisorder = mean(Sleep.Disorder == "None"))
+
+# Display the probability and correlation coefficient
+cat("Probability of experiencing sleep disorders in older individuals (Age >= 50):", round(probability_disorder_in_elderly$ProbabilityDisorder, 2), "\n")
+cat("Correlation Coefficient between Age and Sleep Duration:", round(correlation_duration$estimate, 2), "\n")
+```
+
+## Explanation of the results I have obtained.
+I will answer each of the questions with the results I have obtained. 
+
+
+## 1-) What is the average sleep duration among different age and gender groups? .
+
+The average sleep duration for females is approximately 7.28 hours, while for males, it is approximately 6.91 hours. he graph shows that there are differences in average sleep duration between genders. Specifically, it appears that females, represented by the "Female" category, have a higher average sleep duration compared to males, represented by the "Male" category.
+
+
+## 2-) Is there a relationship between sleep duration and the quality of sleep?.
+
+Correlation Coefficient: The correlation coefficient is approximately 0.49, which indicates a moderate positive correlation between sleep duration and sleep quality. This means that as sleep duration increases, sleep quality tends to improve. However, the strength of this correlation is moderate, not extremely strong.
+
+p-value: The p-value is very close to zero (p < 0.05), indicating that the correlation is statistically significant. In other words, there is strong evidence to suggest that the observed correlation is not due to random chance.
+
+Overall Interpretation: Based on the statistical analysis and the graph, it can be concluded that there is a statistically significant moderate positive correlation between sleep duration and sleep quality. This means that individuals who sleep longer tend to have better sleep quality.
+
+
+## 3-) Question 3: Do people with higher stress levels tend to have lower sleep quality?.
+
+Correlation Coefficient: The correlation coefficient is approximately -0.33, which indicates a moderate negative correlation between stress levels and sleep quality. This means that as stress levels increase, sleep quality tends to decrease. However, the strength of this correlation is moderate, not extremely strong.
+
+Based on the statistical analysis and the graph, it can be concluded that there is a statistically significant moderate negative correlation between stress levels and sleep quality. This means that individuals with higher stress levels are likely to experience lower sleep quality.
+
+
+## 4-)Is there a correlation between daily physical activity levels and sleep duration or quality?
+
+Physical Activity Level vs. Sleep Duration:
+The correlation coefficient is approximately 0.15, indicating a very weak positive correlation between physical activity levels and sleep duration. This suggests that there is a slight tendency for individuals with higher physical activity levels to have slightly longer sleep durations. However, the correlation is very weak and may not be practically significant.
+
+Physical Activity Level vs. Sleep Quality:
+The correlation coefficient is approximately -0.12, indicating a very weak negative correlation between physical activity levels and sleep quality. This suggests that there is a slight tendency for individuals with higher physical activity levels to have slightly lower sleep quality. Similar to the previous correlation, this correlation is very weak and may not be practically significant.
+
+Overall Interpretation:
+Based on the statistical analysis and the graphs, there are very weak correlations between daily physical activity levels and both sleep duration and sleep quality. These correlations are so weak that they may not have practical significance. Therefore, it is challenging to draw strong conclusions about the relationships between physical activity, sleep duration, and sleep quality based on this data. Other factors likely play a more substantial role in influencing sleep patterns and quality.
+
+
+## 5-)How do sleep patterns change with age? Are older individuals more likely to experience sleep disorders?
+
+Age vs. Sleep Duration:
+The correlation coefficient is approximately -0.08, indicating a very weak negative correlation between age and sleep duration. This suggests that, on average, older individuals tend to have slightly shorter sleep durations, but the correlation is very weak and may not be practically significant.
+
+Probability of Sleep Disorders in Older Individuals:
+The probability of experiencing sleep disorders in older individuals (age >= 50) is approximately 0.39 (39%). This suggests that nearly 39% of individuals aged 50 or older in the dataset are likely to experience some form of sleep disorder.
+
+Overall Interpretation:
+Based on the statistical analysis and the scatter plot, there is a very weak negative correlation between age and sleep duration. However, this correlation is not practically significant, as it is very close to zero. Additionally, the probability analysis indicates that a substantial proportion of older individuals in the dataset are likely to experience sleep disorders.
+
+Therefore, while there may be some variations in sleep duration with age, it is not a strong or clear relationship, and other factors likely play a more substantial role in sleep patterns. Additionally, a significant proportion of older individuals in the dataset appear to be at risk of experiencing sleep disorders, emphasizing the importance of addressing sleep-related issues in this age group.
+
+
+## Potential problems that I plan to investigate for future studies.
+-Does engaging in physical activity at certain times of the day affect sleep patterns? 
+-Examine the relationship between stress levels and various health indicators, including sleep quality, blood pressure, and heart rate. 
+-Based on the findings, identify potential interventions or lifestyle changes that can improve sleep health and overall well-being.
+In order to come to a conclusion with these problems I may need a database with more subjects and new packages to have more functions available.
+
